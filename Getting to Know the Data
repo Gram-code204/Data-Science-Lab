@@ -1,0 +1,1191 @@
+Getting to Know the Data
+Introduction
+❓ Why does the shape of your data determine everything that follows?
+
+Before you can visualize, correlate, or model anything, the data must be in the right form. Most real-world datasets are not in that form. They are built for human convenience — for the person entering the data — not for computational analysis. This lesson teaches you the rules that govern tidy data and the pandas tools that enforce them. Learn them once; they apply to every dataset you will ever work with.
+
+Research Question: Are property prices in Mexico more influenced by property size or by location?
+
+We will spend four lessons answering that question with data. This first lesson is about getting the data ready. Before any analysis is possible, we must:
+
+Understand what "clean" data looks like (tidy data framework)
+Load three separate CSV files into Python
+Inspect each file to diagnose its problems
+Build a pipeline that cleans each file and combines them into one master dataset
+Produce the first descriptive statistics to understand the overall distribution
+Nothing about this process is optional. A flawed data-loading step corrupts every subsequent result. A data scientist who skips the inspection ritual discovers the corruption only at the end — after hours of work. This lesson makes you rigorous from the start.
+
+By the end of this notebook you will be able to:
+
+Explain what tidy data is and why its three rules form the contract that makes pandas powerful
+Use the five-method inspection ritual (.head(), .shape, .info(), .dtypes, .isnull().sum()) to diagnose any new dataset in about ten seconds
+Distinguish attributes from methods using the "Noun vs Verb" rule, and explain why getting this wrong produces a TypeError
+Build a multi-step method chain to read, drop nulls, convert types, and rename columns in a single readable pipeline
+Use .assign() with a lambda function to create or overwrite columns without breaking the chain
+Concatenate three CSV files into one master dataset with pd.concat() and explain why ignore_index=True matters
+Read and interpret the output of .describe(), including mean vs median, the meaning of standard deviation, and what right skew tells you about housing prices
+1. Conceptual Foundation: Tidy Data
+🎯 Why tidy data is the foundation of every pandas workflow
+
+Everything in pandas — filtering rows, grouping, pivoting, merging, plotting — assumes your data follows a single contract: one variable per column, one observation per row, one value per cell. Break the contract and the library fights you at every step. Honour the contract and operations that look complicated become one-liners.
+
+1.1 Tabular Data: The Spreadsheet Mental Model
+You are likely familiar with tabular data: information organized into a grid of rows and columns, exactly like a spreadsheet.
+
+Rows run horizontally. Each row is one observation — one thing measured at one moment in time. In our housing dataset, each row is one property listing.
+Columns run vertically. Each column is one variable — one property being measured across all observations. In our housing dataset, the columns are things like price_usd, area_m2, state.
+However, not all tabular data is equally useful for computation. Data optimized for human data entry is often "messy" for computers. Data optimized for computation is called Tidy Data.
+
+The distinction matters enormously in practice. When data is tidy, operations that should be simple — "what is the average price per state?" — are genuinely simple. When data is not tidy, the same question requires complicated workarounds.
+
+from IPython.display import VimeoVideo
+
+# Bigger video
+VimeoVideo("1169843858", h="3298dbabb7", width=700, height=450) 
+Getting to Know the Data
+Introduction
+❓ Why does the shape of your data determine everything that follows?
+
+Before you can visualize, correlate, or model anything, the data must be in the right form. Most real-world datasets are not in that form. They are built for human convenience — for the person entering the data — not for computational analysis. This lesson teaches you the rules that govern tidy data and the pandas tools that enforce them. Learn them once; they apply to every dataset you will ever work with.
+
+Research Question: Are property prices in Mexico more influenced by property size or by location?
+
+We will spend four lessons answering that question with data. This first lesson is about getting the data ready. Before any analysis is possible, we must:
+
+Understand what "clean" data looks like (tidy data framework)
+Load three separate CSV files into Python
+Inspect each file to diagnose its problems
+Build a pipeline that cleans each file and combines them into one master dataset
+Produce the first descriptive statistics to understand the overall distribution
+Nothing about this process is optional. A flawed data-loading step corrupts every subsequent result. A data scientist who skips the inspection ritual discovers the corruption only at the end — after hours of work. This lesson makes you rigorous from the start.
+
+By the end of this notebook you will be able to:
+
+Explain what tidy data is and why its three rules form the contract that makes pandas powerful
+Use the five-method inspection ritual (.head(), .shape, .info(), .dtypes, .isnull().sum()) to diagnose any new dataset in about ten seconds
+Distinguish attributes from methods using the "Noun vs Verb" rule, and explain why getting this wrong produces a TypeError
+Build a multi-step method chain to read, drop nulls, convert types, and rename columns in a single readable pipeline
+Use .assign() with a lambda function to create or overwrite columns without breaking the chain
+Concatenate three CSV files into one master dataset with pd.concat() and explain why ignore_index=True matters
+Read and interpret the output of .describe(), including mean vs median, the meaning of standard deviation, and what right skew tells you about housing prices
+1. Conceptual Foundation: Tidy Data
+🎯 Why tidy data is the foundation of every pandas workflow
+
+Everything in pandas — filtering rows, grouping, pivoting, merging, plotting — assumes your data follows a single contract: one variable per column, one observation per row, one value per cell. Break the contract and the library fights you at every step. Honour the contract and operations that look complicated become one-liners.
+
+1.1 Tabular Data: The Spreadsheet Mental Model
+You are likely familiar with tabular data: information organized into a grid of rows and columns, exactly like a spreadsheet.
+
+Rows run horizontally. Each row is one observation — one thing measured at one moment in time. In our housing dataset, each row is one property listing.
+Columns run vertically. Each column is one variable — one property being measured across all observations. In our housing dataset, the columns are things like price_usd, area_m2, state.
+However, not all tabular data is equally useful for computation. Data optimized for human data entry is often "messy" for computers. Data optimized for computation is called Tidy Data.
+
+The distinction matters enormously in practice. When data is tidy, operations that should be simple — "what is the average price per state?" — are genuinely simple. When data is not tidy, the same question requires complicated workarounds.
+
+from IPython.display import VimeoVideo
+
+# Bigger video
+VimeoVideo("1169843858", h="3298dbabb7", width=700, height=450) 
+1.2 What Is Tidy Data?
+Tidy data is a way of organizing tabular data so that the structure maps directly to the meaning. This concept was formalized by statistician Hadley Wickham in a 2014 paper in the Journal of Statistical Software and forms the backbone of the R tidyverse. In Python, the same principles underpin every pandas workflow.
+
+📌 The Three Rules of Tidy Data
+
+Each variable forms a column — every property being measured gets its own dedicated column.
+Each observation forms a row — every event, entity, or measurement gets its own dedicated row.
+Each value is a single cell — one number or string per cell, no composite values (no "latitude,longitude" packed into one string).
+These rules sound simple, but violating them is surprisingly easy — especially when designing tables for human readability or for data entry forms.
+
+Why these rules matter practically: When a variable is split across multiple columns (rule 1 violation), you cannot reference it with a single column name. When multiple observations are collapsed into one row (rule 2 violation), groupby operations break. When two values share a cell (rule 3 violation), arithmetic is impossible without parsing.
+
+The third CSV file in our housing dataset violates rules 1 and 3 simultaneously: latitude and longitude are jammed into a single cell as "19.4326,-99.1332". We will need to split that cell apart before we can use the coordinates as numbers.
+
+1.3 Visualizing the Difference: Wide vs Long Format
+Imagine tracking the housing stock of three Mexican states over two years.
+
+🚦 Wide Format vs Long (Tidy) Format — which wins for computation?
+Criterion	Wide Format ("spreadsheet layout")	Long / Tidy Format
+Row structure	One row per state, years spread across columns	One row per state × year combination
+Column headers	Contain data values ("2022", "2023")	Contain variable names ("year", "listings")
+Adding a new year	Adds a new column → horizontal growth	Adds new rows → vertical growth
+Filter to one year	Must select a specific named column	df[df["year"] == 2022] — standard row filter
+Compute yearly avg	Must average across multiple columns	df["listings"].mean() — trivial
+Use with .groupby()	❌ Not directly	✅ Immediately: df.groupby("year")["listings"].mean()
+Merge with other data	Requires reshaping first	Works with a simple pd.merge()
+🧠 Verdict: Long (Tidy) format wins for computation. Wide format is comfortable for human reading and for data entry forms. Tidy format is what pandas was designed for. The transformation from wide to tidy is called "melting" or "unpivoting" — a topic you will encounter in later projects.
+
+Unpacking why the wide-format problems are serious:
+
+Problem 1 — Column headers contain data values, not variable names. The column names "2022" and "2023" are not variable names — they are data values that belong in a year variable. By embedding them in the table structure, they become inaccessible to computational operations. You cannot write df["year"] == 2022 when year is not a column; instead you are forced to hard-code column names in your code, which breaks the moment you add a third year.
+
+Problem 2 — A single variable is fragmented across multiple columns. Housing stock data is scattered across "2022" and "2023" columns. To compute the average number of listings, you cannot reference "the listings column" — you must manually combine two (or twenty) columns. This is tedious, error-prone, and does not generalize to new years.
+
+Problem 3 — Horizontal scaling creates structural problems. Adding data for 2024, 2025, 2026 makes the table wider. Computational tools are optimized for vertical growth (adding rows), not horizontal growth (adding columns).
+
+1.4 Tidy Data in Python
+While tidy data was formalized in R, the principle is fundamental to Python data science. The entire pandas API is designed around the assumption that your data is tidy. Functions like df.groupby(), df.pivot_table(), df.merge(), and seaborn.catplot() all expect tidy data as input — the documentation explicitly states this.
+
+➡️ Now that we understand our goal — tidy data — let's import our tools and start working with the Mexico City property dataset.
+
+✅ You can take Multiple Choice Question 1.1.2.1
+
+# Import pandas for data manipulation
+import pandas as pd
+2. Setting Up
+💡 What does import pandas as pd actually do?
+
+When Python encounters import pandas, it searches for the pandas package in your Python installation, loads the entire library into memory, and makes all its classes, functions, and constants available to your script. The as pd part assigns a short alias — from this point forward, pd is pandas in your script.
+
+Why the pd alias is a universal convention:
+
+The pandas community settled on pd decades ago. Every tutorial, every Stack Overflow answer, every pandas documentation page uses pd. If you write import pandas as banana, your code will run correctly — but it will confuse every collaborator, every reader, and every AI assistant you ever show it to. Follow the convention: import pandas as pd, always.
+
+What the pd. prefix means:
+
+After importing, every pandas class and function is accessed through the pd. prefix:
+
+What you write	What it is
+pd.read_csv(...)	The function that reads a CSV file into a DataFrame
+pd.concat([...])	The function that stacks multiple DataFrames
+pd.DataFrame(...)	The class constructor for creating a DataFrame from scratch
+pd.Series(...)	The class constructor for a one-dimensional labeled array
+What is a pandas DataFrame?
+
+A DataFrame is a two-dimensional, labeled data structure — think of it as a spreadsheet that lives in memory, with all the computational power of Python attached. Each column is a pandas Series (a one-dimensional labeled array), and the DataFrame holds many Series aligned by a shared index (the row labels).
+
+The index is the leftmost unlabeled column you see when you display a DataFrame — by default it is a sequence of integers starting at 0. It is not data; it is the addressing system pandas uses to align columns and enable fast lookups.
+
+For this project, our DataFrame will have one row per property listing and one column per measured variable: property_type, state, lat, lon, area_m2, price_usd.
+
+# Define the path to our data file
+path_1 = "./data/mexico-real-estate-1.csv"
+
+# Print it to verify
+print(f'We will load data from: "{path_1}"')
+We will load data from: "./data/mexico-real-estate-1.csv"
+3. Loading the Data
+3.1 Defining the File Path
+❓ Why store the path in a variable instead of typing it directly into pd.read_csv()?
+
+A file path is the address of a file on disk — the sequence of folder names that leads from the root of the file system to the file itself. Storing it in a variable (rather than typing the string directly into read_csv) has two concrete benefits:
+
+Single source of truth — if the file moves, gets renamed, or is replaced with an updated version, you update the variable in one place and every cell that uses it picks up the change automatically. Without a variable, you must hunt down every occurrence of the string in the notebook.
+
+Explicitness — naming the variable path_1 (and later path_2, path_3) makes your code self-documenting. Anyone reading the notebook knows immediately that these are the three data sources.
+
+Understanding the path string "./data/mexico-real-estate-1.csv":
+
+Reading it from right to left: mexico-real-estate-1.csv is the file name. It lives inside the data/ folder. That folder lives inside . — which means "the current working directory" (the folder where this notebook is stored). The forward-slash / separates directory levels (Python accepts forward slashes on all operating systems).
+
+What is a CSV file?
+
+CSV stands for Comma-Separated Values. It is a plain-text format where:
+
+Each line represents one observation (one property listing).
+Values within a line are separated by commas.
+The first line is usually a header row with column names.
+CSV is the lingua franca of data exchange — simple, human-readable, and understood by every spreadsheet program, database, and analysis tool. pd.read_csv() reads this text file, parses the comma separators, uses the first row as column names, and assembles the result into a DataFrame.
+
+3.2 Reading the CSV
+Code 1.1.3.2 — Load the first file into memory:
+
+# Load the dataset using the variable we defined
+(
+    pd.read_csv(path_1)
+)
+property_type	state	lat	lon	area_m2	price_usd
+0	house	Estado de México	19.560181	-99.233528	150.0	$67,965.56
+1	house	Nuevo León	25.688436	-100.198807	186.0	$63,223.78
+2	apartment	Guerrero	16.767704	-99.764383	82.0	$84,298.37
+3	apartment	Guerrero	16.829782	-99.911012	150.0	$94,308.80
+4	house	Veracruz de Ignacio de la Llave	NaN	NaN	175.0	$94,835.67
+...	...	...	...	...	...	...
+695	house	Morelos	NaN	NaN	310.0	$237,089.17
+696	house	Yucatán	21.050653	-89.558841	334.0	$137,017.34
+697	house	Yucatán	21.343796	-89.262060	130.0	$110,404.35
+698	apartment	Nuevo León	NaN	NaN	155.0	$184,446.42
+699	house	Querétaro	20.587378	-100.418361	106.0	$56,637.97
+700 rows × 6 columns
+
+📊 Reading the raw DataFrame output
+
+You should see a table with columns including property_type, state, lat, lon, area_m2, and price_usd. This is the raw data exactly as stored in the CSV — no modifications have been made yet.
+
+What to notice immediately:
+
+price_usd shows values like "$55,000.00" — that dollar sign and comma make this column a text string, not a number. You cannot compute df["price_usd"].mean() until we strip those characters and convert to float.
+lat and lon may show NaN — NaN stands for "Not a Number" and is pandas' representation of a missing value. Rows with NaN coordinates cannot be used in any geographic analysis.
+The index (the unlabeled leftmost column) starts at 0 and counts up. This is the default integer index that pandas assigns automatically when reading a CSV. It is not a data column.
+The data type of price_usd is not yet obvious from looking at the values — it could be stored as text or as a number that happens to include special characters. We need the inspection ritual to find out.
+➡️ Before cleaning anything, we must understand exactly what we are working with. The five-method inspection ritual in §3.3 gives us that picture in a structured way.
+
+3.3 Inspecting the Data: The Five-Method Ritual
+🎯 The Five-Method Inspection Ritual — run this every time you load a new dataset
+
+Experienced data scientists have a consistent habit: before touching or modifying any new dataset, they run a small set of diagnostic commands to understand its shape, types, and completeness. These five checks take about ten seconds in total and prevent the vast majority of bugs that come from assumptions about the data.
+
+Step	Command	What it tells you
+1	.head()	Visual overview: column names, sample values, index
+2	.shape	Exact dimensions: total rows × total columns
+3	.info()	Column types, non-null counts, memory usage — the most informative single command
+4	.dtypes	Data type of each column in isolation — useful for quick type audits
+5	.isnull().sum()	Number of missing values per column — reveals where the gaps are
+Think of it as the data scientist's equivalent of putting on safety glasses before entering the lab. Once you have the results of all five, you can write a specific, informed cleaning plan rather than guessing.
+
+The code cells below walk through each method. After all five, we synthesize what their combined output tells us about the Mexico City housing dataset before we write a single line of cleaning code.
+
+⚠️ Resist the temptation to skip this step. Even if you wrote the data collection script yourself, always inspect the loaded data. Encoding issues, unexpected nulls, and type mismatches appear at the I/O boundary — the gap between the file on disk and the object in memory.
+
+from IPython.display import VimeoVideo
+
+# Bigger video
+VimeoVideo("1169843490", h="3298dbabb7", width=700, height=450) 
+Code 1.1.3.3 — Step 1: .head() gives you the first 5 rows as a visual sanity check.
+
+(
+    pd.read_csv(path_1)
+    .head()
+)
+property_type	state	lat	lon	area_m2	price_usd
+0	house	Estado de México	19.560181	-99.233528	150.0	$67,965.56
+1	house	Nuevo León	25.688436	-100.198807	186.0	$63,223.78
+2	apartment	Guerrero	16.767704	-99.764383	82.0	$84,298.37
+3	apartment	Guerrero	16.829782	-99.911012	150.0	$94,308.80
+4	house	Veracruz de Ignacio de la Llave	NaN	NaN	175.0	$94,835.67
+📊 Reading the .head() output — Step 1 of the inspection ritual
+
+.head() shows the first 5 rows (by default). This gives you an immediate visual picture of the data before you look at any statistics.
+
+What to check:
+
+Column names — confirm that the six expected variables are present: property_type, state, lat, lon, area_m2, price_usd.
+price_usd format — if you see "$55,000.00" (with quotes, dollar sign, and comma), this column is stored as text, not a number.
+lat / lon — some rows may show NaN (missing coordinates). Note which rows they are, even if you cannot yet count them.
+property_type — values should be strings like "house" or "apartment".
+The index — starts at 0, confirming pandas assigned a default integer index.
+.head() gives you the shape of the data visually, but it only shows 5 rows. You cannot tell from .head() alone how many rows are missing, or what the overall type profile looks like. For that, we need the next three steps.
+
+➡️ Step 2: .shape — how large is this DataFrame exactly?
+
+Code 1.1.3.4 — Step 2: .shape returns the exact dimensions as a tuple (number_of_rows, number_of_columns).
+
+📌 Attribute, not method — no parentheses. .shape is a property that the DataFrame has (like a noun), not an action it performs (a verb). It does not require parentheses. Typing df.shape() raises a TypeError because Python tries to call a tuple as if it were a function.
+
+We will explain the full attribute-vs-method distinction after all five steps. For now: no parentheses on .shape and .dtypes.
+
+.shape complements .head() precisely because .head() is visual but partial (shows 5 of potentially thousands of rows), while .shape is exact but non-visual (tells you the total count). Use them together as a pair.
+
+After cleaning (dropping rows with missing coordinates), the row count will decrease. Write down what .shape returns here — it will be your reference point for verifying that the cleaning step removes exactly the right number of rows.
+
+(
+    pd.read_csv(path_1)
+    .shape
+)
+(700, 6)
+📊 Reading the .shape output — Step 2 of the inspection ritual
+
+You should see a tuple such as (700, 6):
+
+700 — total number of property listings in this file (before cleaning).
+6 — total number of variables (columns).
+These are your baseline numbers. After .dropna() removes rows with missing coordinates, the first number will decrease. After .concat() combines all three files, the first number will increase (to roughly the sum of all three files).
+
+If you see a different column count than 6, stop and check the CSV header. It likely means there are extra columns (perhaps an unnamed index column written by a previous df.to_csv() call without index=False) — something to fix before proceeding.
+
+Code 1.1.3.5 — Step 3: .info() is the most information-dense single command in the entire pandas inspection toolkit.
+
+💡 Why .info() deserves its own spotlight
+
+A single call to .info() tells you all of the following simultaneously:
+
+Output	What it reveals
+Row count	RangeIndex: N entries, 0 to N-1
+Column count	Data columns (total M columns)
+Column names	Listed in order
+Non-null count	X non-null per column — reveals exactly how many values are present
+Dtype	float64, int64, object — the stored type of each column
+Memory usage	Total memory the DataFrame occupies
+The non-null count is the key addition over .shape. If a column shows 585 non-null for a DataFrame with 702 rows, you immediately know 117 values are missing — before running any cleaning code. You do not need to compute it separately.
+
+The dtype exposes silent type bugs. A column stored as object when you expected float64 is the most common data quality problem in practice. You cannot compute df["price"].mean() if price is text.
+
+.info() does not return a value — it prints directly to the console. This is intentional: the output is designed for human inspection, not for computation.
+
+(
+    pd.read_csv(path_1)
+    .info()
+)
+<class 'pandas.DataFrame'>
+RangeIndex: 700 entries, 0 to 699
+Data columns (total 6 columns):
+ #   Column         Non-Null Count  Dtype  
+---  ------         --------------  -----  
+ 0   property_type  700 non-null    str    
+ 1   state          700 non-null    str    
+ 2   lat            583 non-null    float64
+ 3   lon            583 non-null    float64
+ 4   area_m2        700 non-null    float64
+ 5   price_usd      700 non-null    str    
+dtypes: float64(3), str(3)
+memory usage: 52.7 KB
+📊 Reading the .info() output — Step 3 of the inspection ritual
+
+Scan the output systematically — top to bottom:
+
+1 — Row and column count: Confirms what .shape told you. If these differ, something went wrong in loading.
+
+2 — Dtype column (most important):
+
+Dtype	Meaning	Expected for
+float64	64-bit floating-point number	lat, lon, area_m2, price_usd (after cleaning)
+int64	64-bit integer	Counts, categorical codes
+object	Python string or mixed types	property_type, state, price_usd (before cleaning)
+What this reveals about our dataset:
+
+price_usd is object — it contains text strings like "$55,000.00", not numbers. This is the primary type bug we need to fix.
+lat and lon are float64 — but the non-null count will be less than the total row count, telling us that some rows are missing coordinates.
+property_type and state are str — expected, since they hold text.
+3 — Non-null counts: A column with 583 non-null in a 700-row DataFrame has exactly 117 missing values. You do not need .isnull().sum() to know this — though Step 5 will confirm it column by column.
+
+4 — Memory usage: Useful for large datasets. At this scale (~700 rows) it is negligible, but good to notice.
+
+➡️ Step 4: .dtypes — a cleaner view of the type column.
+
+(
+    pd.read_csv(path_1)
+    .dtypes
+)
+property_type        str
+state                str
+lat              float64
+lon              float64
+area_m2          float64
+price_usd            str
+dtype: object
+📊 Reading the .dtypes output — Step 4 of the inspection ritual
+
+.dtypes returns a pandas Series where the index is the column names and the values are the data types. It gives you the same type information as .info(), but in a machine-readable format — you can write code like df.dtypes[df.dtypes == "object"] to programmatically find all text columns.
+
+Use case for .dtypes over .info(): If you have a DataFrame with 50 or 100 columns, .info() prints a long block of text that is hard to scan. .dtypes returns a compact Series that you can filter, sort, and inspect much more easily.
+
+For this dataset: Confirm that price_usd shows object here. This single fact tells you the entire cleaning plan for that column: strip the $ and , characters, then convert to float64 with .astype(float). Two string operations and one type cast — that's it.
+
+➡️ Step 5: .isnull().sum() — where exactly are the missing values?
+
+Code 1.1.3.7 — Step 5: .isnull().sum() produces a precise count of missing values per column.
+
+💡 How .isnull().sum() works — a chain of two operations
+
+This is your first example of method chaining (which we will formalize in §4). It works in two stages:
+
+.isnull() — converts every cell in the DataFrame to a boolean: True if the value is missing (NaN), False if present. The result is a DataFrame of the same shape, filled entirely with True/False.
+.sum() — sums the booleans column by column. In Python, True counts as 1 and False as 0. So .sum() on a boolean column equals "the number of True values" = "the number of missing values in that column."
+The result is a Series where the index is the column names and the values are the missing-value counts.
+
+⚠️ Why this matters before any cleaning
+
+Missing values do not behave like zero. They propagate through operations: NaN + 5 = NaN, NaN > 100 = NaN. If you compute a mean on a column with missing values, pandas will automatically exclude the missing values — which is usually what you want, but you should know it is happening.
+
+More importantly: if you drop the wrong rows, or impute values blindly, you change the dataset's statistical properties. Always know how many values are missing and in which columns before deciding how to handle them.
+
+(
+    pd.read_csv(path_1)
+    .isnull()
+    .sum()
+)   
+property_type      0
+state              0
+lat              117
+lon              117
+area_m2            0
+price_usd          0
+dtype: int64
+📊 Reading the .isnull().sum() output — Step 5 of the inspection ritual
+
+You should see a Series like:
+
+property_type      0
+state              0
+lat              117
+lon              117
+area_m2            0
+price_usd          0
+dtype: int64
+Interpreting this:
+
+property_type and state: 0 missing — these categorical columns are complete.
+lat and lon: 117 missing each — the same 117 rows have no coordinates. This is not a coincidence: latitude and longitude are always paired. A row missing lat will always be missing lon too, because they come from the same geographic lookup.
+area_m2 and price_usd: 0 missing — but price_usd still needs type conversion (it is text, not numbers).
+dtype: int64 at the bottom refers to the dtype of the counts themselves (whole numbers), not to your data columns.
+Cleaning decision: We will drop the 117 rows missing coordinates using .dropna(). This is reasonable because: (a) 117/702 = 17% — a manageable loss, (b) we have no way to impute coordinates meaningfully, (c) any geographic analysis would fail anyway on those rows.
+
+Attributes vs Methods: The "Noun vs Verb" Rule
+You may have noticed that some commands use parentheses (df.head(), df.info()) and some do not (df.shape, df.dtypes). This is one of the most common sources of confusion for new pandas users. The rule is simple:
+
+🚦 The "Noun vs Verb" Rule
+
+Type	Analogy	What it is	Pandas examples	Parentheses?
+Attribute	A noun — what the object has	A stored value, computed once	.shape, .dtypes, .columns, .index, .values	❌ No ()
+Method	A verb — what the object does	A function call that runs code	.head(), .info(), .describe(), .dropna()	✅ Yes ()
+Practical test: type df.head without parentheses. Python prints something like <bound method DataFrame.head of ...> — it is telling you what the method is without running it. Add () to trigger the action.
+
+The error you get when you mix them up:
+
+df.shape() → TypeError: 'tuple' object is not callable — because .shape is a tuple (a value), not a function. Python tried to call (700, 6) as a function and failed.
+df.head (no ()) → no error, but no output either — Python returned the method object and discarded it. This is a silent bug that can confuse beginners for a long time.
+✅ You can take Multiple Choice Question 1.1.3.1
+
+🧠 Key insight — what the five-method ritual told us about the Mexico City dataset
+
+Question	Answer	Source
+How many listings?	702 rows × 6 columns	.shape
+Any type bugs?	Yes — price_usd stored as object (text), needs conversion	.info(), .dtypes
+Any missing data?	Yes — 117 rows missing lat and lon	.isnull().sum()
+What does a row look like?	One property listing with type, location, size, price	.head()
+Which columns are numeric?	lat, lon, area_m2 — but NOT price_usd yet	.dtypes
+This is everything we need to write a specific cleaning plan:
+
+Drop the 117 rows missing coordinates → .dropna()
+Strip $ and , from price_usd → .str.replace()
+Convert price_usd from text to float → .astype(float)
+We now know exactly what needs fixing and exactly how many rows we will lose. No guessing required.
+
+➡️ Section 4 builds this cleaning plan as a single method chain, combining all three operations into one readable, debuggable pipeline.
+
+# Inspecting the key columns
+# We open a parenthesis to start a "chain" across multiple lines
+(
+    pd.read_csv(path_1)
+)
+property_type	state	lat	lon	area_m2	price_usd
+0	house	Estado de México	19.560181	-99.233528	150.0	$67,965.56
+1	house	Nuevo León	25.688436	-100.198807	186.0	$63,223.78
+2	apartment	Guerrero	16.767704	-99.764383	82.0	$84,298.37
+3	apartment	Guerrero	16.829782	-99.911012	150.0	$94,308.80
+4	house	Veracruz de Ignacio de la Llave	NaN	NaN	175.0	$94,835.67
+...	...	...	...	...	...	...
+695	house	Morelos	NaN	NaN	310.0	$237,089.17
+696	house	Yucatán	21.050653	-89.558841	334.0	$137,017.34
+697	house	Yucatán	21.343796	-89.262060	130.0	$110,404.35
+698	apartment	Nuevo León	NaN	NaN	155.0	$184,446.42
+699	house	Querétaro	20.587378	-100.418361	106.0	$56,637.97
+700 rows × 6 columns
+
+4. Building the Cleaning Pipeline (Method Chaining)
+🎯 What is method chaining and why does it matter?
+
+In pandas, every transformation method returns a new DataFrame. .dropna() returns a new DataFrame with certain rows removed. .assign() returns a new DataFrame with a new or modified column. Because every method returns a DataFrame, you can call the next method directly on the result — one after another — without storing intermediate results in temporary variables.
+
+This is method chaining.
+
+The "river" mental model:
+
+Imagine data as water flowing down a river. Each transformation is a section of the river that filters, shapes, or enriches the water as it flows through:
+
+(
+    pd.read_csv(path_1)          # The source: raw water from the spring
+    .dropna()                    # First bend: filter out the debris (missing rows)
+    .assign(price_usd = ...)     # Second bend: enrich the water (fix the column type)
+)
+The data enters at the top as a raw CSV and exits at the bottom as a clean DataFrame. Each line adds one transformation. The parentheses ( and ) wrapping the entire chain tell Python to treat this as one statement — without them, Python reads line by line and raises a SyntaxError when it encounters the second method.
+
+💡 Why method chaining beats temporary variables
+
+Alternative without chaining:
+
+df = pd.read_csv(path_1)             # raw
+df = df.dropna()                     # drop missing rows
+df["price_usd"] = df["price_usd"].str.replace("$", "").str.replace(",", "").astype(float)
+Problems with this approach:
+
+df is overwritten three times — at any point in the notebook, df could be the raw version, the cleaned version, or the converted version. This is a major source of bugs when you re-run cells out of order.
+The last line mutates df in place rather than returning a new DataFrame. In-place mutation breaks the chain and makes it impossible to preview intermediate results cleanly.
+The temporary variable df accumulates meaning as you go, but its name never changes — this is confusing.
+Why chaining wins:
+
+Reads top-to-bottom like a recipe.
+No workspace pollution — the result is assigned to a final variable only once.
+Easy to debug: comment out any line in the chain to see the data at that step.
+Chainability: each method returns a new DataFrame, so the next method always has something to act on.
+4.2 Step 1: Dropping Missing Values with .dropna()
+From the inspection ritual, we know 117 rows are missing lat / lon. We remove them with .dropna().
+
+📌 What .dropna() does, precisely
+
+By default, .dropna() removes any row that contains at least one missing value (a NaN in any column). For our dataset this is correct — the 117 rows missing coordinates are missing from both lat and lon. We want to drop all of them.
+
+If you need more control (e.g., drop only rows where all columns are missing, or only rows where a specific column is missing), .dropna() accepts the how= and subset= arguments. For now, the default behaviour is exactly what we need.
+
+⚠️ Dropping rows is never a neutral decision. You are assuming the missing values are random — that removing them does not systematically exclude a particular neighborhood, price tier, or property type. If missing coordinates are concentrated in rural low-income areas, dropping them biases the dataset toward urban high-income listings. Always document the choice and the count. Here we log: 117 rows dropped for missing coordinates (~17% of file 1).
+
+Code 1.1.4.2
+
+# Step 1: Drop missing values
+(
+    pd.read_csv(path_1)
+    .dropna()  # Remove rows where values are missing
+    
+)
+property_type	state	lat	lon	area_m2	price_usd
+0	house	Estado de México	19.560181	-99.233528	150.0	$67,965.56
+1	house	Nuevo León	25.688436	-100.198807	186.0	$63,223.78
+2	apartment	Guerrero	16.767704	-99.764383	82.0	$84,298.37
+3	apartment	Guerrero	16.829782	-99.911012	150.0	$94,308.80
+5	house	Yucatán	21.052583	-89.538639	205.0	$105,191.37
+...	...	...	...	...	...	...
+693	house	Puebla	19.051815	-98.277669	198.0	$115,910.26
+694	apartment	Distrito Federal	19.309208	-99.171906	70.0	$77,572.89
+696	house	Yucatán	21.050653	-89.558841	334.0	$137,017.34
+697	house	Yucatán	21.343796	-89.262060	130.0	$110,404.35
+699	house	Querétaro	20.587378	-100.418361	106.0	$56,637.97
+583 rows × 6 columns
+
+📊 After .dropna() — verifying the drop
+
+The row count should decrease by exactly 117 (from the original count shown by .shape to that count minus 117). You can verify by adding .shape at the end of the chain:
+
+pd.read_csv(path_1).dropna().shape  # should be (orig_rows - 117, 6)
+Scroll across the output table to confirm:
+
+lat and lon no longer show NaN in any visible row.
+price_usd still shows the $ prefix — we have not fixed the type yet.
+The index now has gaps (e.g., jumps from row 2 to row 5) — this is because the original row numbers were preserved. The gaps are the dropped rows. We will reset the index later with ignore_index=True in pd.concat().
+What the gaps in the index mean: after .dropna(), if you access df.loc[3], pandas will raise a KeyError if row 3 was a dropped row. This is one reason to reset the index — or simply use .iloc[3] (positional access) instead of .loc[3] (label access).
+
+4.3 Step 2: Cleaning price_usd with .assign() and lambda
+❓ How do you refer to the current version of the DataFrame in the middle of a chain?
+
+Suppose you have cleaned the data with .dropna() and now want to create a new column based on an existing column. You need to say "take the column as it exists right now — after the drop, not from the original." A regular function would need the cleaned DataFrame passed in as an argument. But inside a chain, you do not have a name for that intermediate result. The lambda solves this.
+
+The lambda x: pattern — intuition:
+
+Think of x as a placeholder name meaning "whatever the DataFrame looks like right now, at this exact step in the chain." When .assign() sees lambda x: ..., it passes the current state of the DataFrame in as x. You can then access any column with x["column_name"] and compute whatever you need.
+
+Formal definition:
+
+lambda x: expression
+A lambda is an anonymous function — a one-shot function with no name:
+
+x is the input — always the DataFrame at the current chain step.
+expression is what you compute and return — the new column values (as a Series).
+Worked example — cleaning price_usd step by step:
+
+.assign(
+    price_usd = lambda x:
+        x["price_usd"]                          # 1. Select the text column
+        .str.replace("$", "", regex=False)      # 2. Remove the dollar sign
+        .str.replace(",", "", regex=False)      # 3. Remove the thousands comma
+        .astype(float)                          # 4. Convert text to number
+)
+Step by step:
+
+x["price_usd"] selects the column from the current (post-.dropna()) DataFrame. The x["price_usd"] column still has values like "$55,000.00".
+.str.replace("$", "", regex=False) deletes every dollar sign. The result is "55,000.00" — still text, still has the comma.
+.str.replace(",", "", regex=False) deletes the thousands separator. The result is "55000.00" — still text, but now a clean numeric string.
+.astype(float) converts the string to a 64-bit floating-point number. The result is 55000.0 — a genuine number you can add, average, and plot.
+⚠️ Why regex=False is mandatory here
+
+In regular-expression syntax, $ means "end of string" — not a literal dollar sign. If you omit regex=False, pandas treats "$" as a regex pattern, finds no literal $ characters to remove (because regex $ matches positions, not characters), and leaves your column dirty — silently.
+
+Similarly, . in regex means "any character." Safe habit: whenever you are matching a literal character with .str.replace(), always add regex=False.
+
+.assign() for creating or overwriting columns:
+
+.assign() can create new columns or overwrite existing ones. Pass as many column_name = value pairs as you need in one call. Each value can be a scalar, a Series, or a lambda function. .assign() always returns a new DataFrame — it does not modify the caller in place, which is exactly what keeps the chain alive.
+
+🧠 Why .assign() beats direct assignment inside chains
+
+Direct assignment — df["price_usd"] = df["price_usd"].str.replace(...) — mutates df in place and returns None. Returning None ends the chain immediately (you cannot call .shape on None). .assign() returns a new DataFrame, so the chain continues.
+
+Code 1.1.4.3
+
+# Step 2: The Complete Chain
+(
+    pd.read_csv(path_1)
+    # 1. Drop rows with missing critical data
+    .dropna()
+    
+    # 2. Create clean numeric columns using `.assign()`
+    # We use 'lambda x' to refer to the data at this specific step in the chain
+    # We overwrite 'price_usd' by accessing the current df (x in our lambda function) and cleaning the string
+    .assign(
+        price_usd = lambda x: x["price_usd"]
+                          .str.replace("$", "", regex=False)
+                          .str.replace(",", "", regex=False)
+                          .astype(float)
+    )
+)
+property_type	state	lat	lon	area_m2	price_usd
+0	house	Estado de México	19.560181	-99.233528	150.0	67965.56
+1	house	Nuevo León	25.688436	-100.198807	186.0	63223.78
+2	apartment	Guerrero	16.767704	-99.764383	82.0	84298.37
+3	apartment	Guerrero	16.829782	-99.911012	150.0	94308.80
+5	house	Yucatán	21.052583	-89.538639	205.0	105191.37
+...	...	...	...	...	...	...
+693	house	Puebla	19.051815	-98.277669	198.0	115910.26
+694	apartment	Distrito Federal	19.309208	-99.171906	70.0	77572.89
+696	house	Yucatán	21.050653	-89.558841	334.0	137017.34
+697	house	Yucatán	21.343796	-89.262060	130.0	110404.35
+699	house	Querétaro	20.587378	-100.418361	106.0	56637.97
+583 rows × 6 columns
+
+📊 After the complete chain — what to verify
+
+Check the price_usd column in the output:
+
+It should display as a number (e.g., 55000.0), not as a string ("$55,000.00"). If it still shows the $, you likely forgot regex=False in one of the .str.replace() calls.
+The column header should still read price_usd — .assign() overwrites in place using the same column name.
+No NaN values should appear in the visible rows — those rows were dropped.
+Diagnostic: add .dtypes at the end of the chain
+
+(
+    pd.read_csv(path_1)
+    .dropna()
+    .assign(price_usd = lambda x: ...)
+    .dtypes   # append this temporarily to verify the type change
+)
+You should see price_usd   float64 — confirming the conversion succeeded. Remove the .dtypes line once confirmed.
+
+🧠 Why method chaining reads better than the alternatives
+
+Nested call version (reads inside-out — unnatural):
+
+df['price_usd'] = pd.to_numeric(df['price_usd'].str.replace('$','').str.replace(',',''))
+> ```
+>
+> Chained version (reads top-to-bottom — natural):
+> ```python
+> .assign(price_usd = lambda x:
+>     x["price_usd"].str.replace("$","",regex=False).str.replace(",","",regex=False).astype(float))
+Both produce the same result, but the chained version matches how we think about the process: start with the text column, remove symbols, convert type.
+
+Code Task 1.1.4.1: Copy the complete chain above and assign it to df1.
+
+Selection deleted
+df1 = (
+    pd.read_csv(path_1)
+    # 1. Drop rows with missing critical data
+    .dropna()
+
+    # 2. Create clean numeric columns using `.assign()`
+    .assign(
+        price_usd=lambda x: ( x["price_usd"]
+            .str.replace("$", "", regex=False)
+            .str.replace(",", "", regex=False)
+            .astype(float)
+        )
+    )
+)
+df1.info()
+<class 'pandas.DataFrame'>
+Index: 583 entries, 0 to 699
+Data columns (total 6 columns):
+ #   Column         Non-Null Count  Dtype  
+---  ------         --------------  -----  
+ 0   property_type  583 non-null    str    
+ 1   state          583 non-null    str    
+ 2   lat            583 non-null    float64
+ 3   lon            583 non-null    float64
+ 4   area_m2        583 non-null    float64
+ 5   price_usd      583 non-null    float64
+dtypes: float64(4), str(2)
+memory usage: 42.6 KB
+📊 Verifying df1 — the cleaned first dataset
+
+After running the solution, confirm that df1 passes all three checks:
+
+Row count: df1.shape[0] should be the original row count minus 117 (the rows dropped for missing coordinates).
+Type of price_usd: df1["price_usd"].dtype should be float64, not object. If it still shows object, the .str.replace() + .astype(float) chain did not run correctly.
+No missing values: df1.isnull().sum().sum() should return 0 — meaning the sum of missing values across all columns is zero.
+df1 is now your clean, typed, complete first dataset. It is ready to be stacked with the other two. We will do that in §5.
+
+✅ You can take Multiple Choice Question 1.1.4.1
+
+5. Clean the Rest of the Dataset and Combine
+We now have one clean DataFrame (df1) from the first CSV file. There are two more CSV files in the data folder — mexico-real-estate-2.csv and mexico-real-estate-3.csv — each covering a different set of property listings.
+
+Why are the data split across three files?
+
+In real-world data pipelines, datasets are commonly split for reasons of scale (one file per month or region), organization (one file per data source), or because of the data collection process itself (three separate scraping runs). Our task is to combine them into one master dataset. But before we can stack them, each file must:
+
+(a) pass through the same cleaning pipeline as df1, and
+(b) have exactly the same column schema as df1 (same column names, same order).
+Code Task 1.1.5.1: Assign the file path for the second dataset.
+
+In the code cell below, you'll see triple ellipses ... — this is a placeholder marking where your answer goes. Replace the ... with the string "./data/mexico-real-estate-2.csv" to assign the file path to path_2.
+
+💡 Hint: Look at how path_1 was assigned in Code 1.1.3.1 — this works exactly the same way, just with a different filename.
+
+# Define the path to our data file
+path_2 = ...
+Code Task 1.1.5.2: Assign the file path for the third dataset.
+
+Replace the ... with "./data/mexico-real-estate-3.csv" to assign it to path_3.
+
+💡 Notice the pattern: path_1, path_2, and path_3 each point to a different numbered file — the same filename stem with an incrementing number. We defined all three paths at the top of this section rather than inline in each pd.read_csv() call. This makes the data sources explicit and easy to audit at a glance. If you needed to swap in a different version of file 2, you change path_2 in one place.
+
+# Define the path to our data file
+path_3 = ...
+Now we load and clean df2 and df3. These two files have slightly different formats from df1, so the cleaning chains will differ.
+
+What is different about df2?
+df2 (mexico-real-estate-2.csv) stores prices in Mexican pesos (price_mxn) instead of US dollars. We must:
+
+Convert price_mxn to price_usd by dividing by the exchange rate (19 MXN/USD).
+Create the new price_usd column with .assign().
+Drop the original price_mxn column with .drop() — because after extraction, the original is redundant and would break schema matching.
+📌 Why .drop() is necessary here
+
+After .assign(price_usd = ...), both price_mxn and the new price_usd exist in the DataFrame. We need to remove price_mxn because:
+
+Tidy data rule — the same information should not appear in two columns. Having both price_mxn and price_usd is redundant and could mislead a reader who picks up the notebook later.
+Schema matching — pd.concat() requires that all three DataFrames have identical column names in the same order. A price_mxn column in df2 but not in df1 or df3 would cause pd.concat() to fill the missing entries with NaN — silently producing a corrupted combined dataset.
+Syntax: df.drop(columns=["column_name"]) — pass column name(s) as a list inside the columns= keyword argument. Common mistake: writing df.drop("price_mxn") without columns= — this tries to drop a row with label "price_mxn" and raises a KeyError.
+
+Currency conversion note: We use a fixed rate of 19 Mexican pesos to 1 US dollar. This was a reasonable approximation for the data collection period. In a production setting you would look up the historical exchange rate for each transaction date — a task that requires an API call or a calendar join, which are topics for later projects.
+
+Code Task 1.1.5.3: Complete the .drop(columns=[...]) call by replacing ... with the name of the column we want to remove.
+
+💡 Hint: Column names are strings — don't forget the quotes: "price_mxn"
+
+# cleaning process using method chaining
+df2 = (
+    pd.read_csv(path_2)
+
+     # Create "price_usd" column (19 pesos to the dollar in 2014)
+    .assign(price_usd = lambda x: x["price_mxn"].div(19))
+
+    # Drop "price_mxn" column
+    .drop(columns=[...])
+
+    # Drop null values
+    .dropna()
+)
+
+# Print object type, shape, and head
+print(f"df2 type: {type(df2)}")
+print(f"df2 shape: {df2.shape}")
+df2.head()
+---------------------------------------------------------------------------
+ValueError                                Traceback (most recent call last)
+Cell In[17], line 3
+      1 # cleaning process using method chaining
+      2 df2 = (
+----> 3     pd.read_csv(path_2)
+      4 
+      5      # Create "price_usd" column (19 pesos to the dollar in 2014)
+      6     .assign(price_usd = lambda x: x["price_mxn"].div(19))
+
+File /usr/local/lib/python3.13/site-packages/pandas/io/parsers/readers.py:873, in read_csv(filepath_or_buffer, sep, delimiter, header, names, index_col, usecols, dtype, engine, converters, true_values, false_values, skipinitialspace, skiprows, skipfooter, nrows, na_values, keep_default_na, na_filter, skip_blank_lines, parse_dates, date_format, dayfirst, cache_dates, iterator, chunksize, compression, thousands, decimal, lineterminator, quotechar, quoting, doublequote, escapechar, comment, encoding, encoding_errors, dialect, on_bad_lines, low_memory, memory_map, float_precision, storage_options, dtype_backend)
+    861 kwds_defaults = _refine_defaults_read(
+    862     dialect,
+    863     delimiter,
+   (...)    869     dtype_backend=dtype_backend,
+    870 )
+    871 kwds.update(kwds_defaults)
+--> 873 return _read(filepath_or_buffer, kwds)
+
+File /usr/local/lib/python3.13/site-packages/pandas/io/parsers/readers.py:300, in _read(filepath_or_buffer, kwds)
+    297 _validate_names(kwds.get("names", None))
+    299 # Create the parser.
+--> 300 parser = TextFileReader(filepath_or_buffer, **kwds)
+    302 if chunksize or iterator:
+    303     return parser
+
+File /usr/local/lib/python3.13/site-packages/pandas/io/parsers/readers.py:1645, in TextFileReader.__init__(self, f, engine, **kwds)
+   1642     self.options["has_index_names"] = kwds["has_index_names"]
+   1644 self.handles: IOHandles | None = None
+-> 1645 self._engine = self._make_engine(f, self.engine)
+
+File /usr/local/lib/python3.13/site-packages/pandas/io/parsers/readers.py:1904, in TextFileReader._make_engine(self, f, engine)
+   1902     if "b" not in mode:
+   1903         mode += "b"
+-> 1904 self.handles = get_handle(
+   1905     f,
+   1906     mode,
+   1907     encoding=self.options.get("encoding", None),
+   1908     compression=self.options.get("compression", None),
+   1909     memory_map=self.options.get("memory_map", False),
+   1910     is_text=is_text,
+   1911     errors=self.options.get("encoding_errors", "strict"),
+   1912     storage_options=self.options.get("storage_options", None),
+   1913 )
+   1914 assert self.handles is not None
+   1915 f = self.handles.handle
+
+File /usr/local/lib/python3.13/site-packages/pandas/io/common.py:772, in get_handle(path_or_buf, mode, encoding, compression, memory_map, is_text, errors, storage_options)
+    769     codecs.lookup_error(errors)
+    771 # open URLs
+--> 772 ioargs = _get_filepath_or_buffer(
+    773     path_or_buf,
+    774     encoding=encoding,
+    775     compression=compression,
+    776     mode=mode,
+    777     storage_options=storage_options,
+    778 )
+    780 handle = ioargs.filepath_or_buffer
+    781 handles: list[BaseBuffer]
+
+File /usr/local/lib/python3.13/site-packages/pandas/io/common.py:492, in _get_filepath_or_buffer(filepath_or_buffer, encoding, compression, mode, storage_options)
+    488 if not (
+    489     hasattr(filepath_or_buffer, "read") or hasattr(filepath_or_buffer, "write")
+    490 ):
+    491     msg = f"Invalid file path or buffer object type: {type(filepath_or_buffer)}"
+--> 492     raise ValueError(msg)
+    494 return IOArgs(
+    495     filepath_or_buffer=filepath_or_buffer,
+    496     encoding=encoding,
+   (...)    499     mode=mode,
+    500 )
+
+ValueError: Invalid file path or buffer object type: <class 'ellipsis'>
+📊 Verifying df2
+
+The type() output confirms you have a DataFrame. Now check the schema:
+
+Run df2.columns.tolist() and compare it to df1.columns.tolist() — they should be identical. If price_mxn still appears, the .drop() call did not execute correctly. If price_usd is absent, the .assign() call failed.
+Run df2["price_usd"].dtype — should be float64, not object.
+Run df2.isnull().sum() — should be all zeros after .dropna().
+If you see a KeyError during drop(columns=["price_mxn"]), you likely left the ... placeholder in place. Replace it with "price_mxn" (in quotes).
+
+df2 is now in the same schema and type state as df1. We are ready to tackle the third file, which has the most complex cleaning requirements.
+
+Inspecting df3 Before Cleaning
+df3 (mexico-real-estate-3.csv) is the most structurally different of the three files — it has the same information, but organized differently. Before building the cleaning chain, we inspect the raw data to understand what transformations are needed.
+
+Code 1.1.5.1 — Load and display the first rows of the raw df3:
+
+(
+    pd.read_csv(path_3)
+    .head()
+)
+📊 What the df3 head reveals — two tidy-data violations
+
+Cast your mind back to §1.2: Rule 3 of tidy data says each cell must contain a single value. The third dataset violates this rule in two places:
+
+❓ Which columns in df3 break tidy-data rules, and what do we need instead?
+
+Problem column	Violation	What it contains	What we need
+lat-lon	Rule 3: two values in one cell	"19.4326,-99.1332" — lat and lon as one string	Two columns: lat (float) and lon (float)
+place_with_parent_names	Rule 1: variable name embedded in values	"|Mexico|Jalisco|Guadalajara|" — state buried in a path string	One column: state (string)
+Both problems require string splitting — cutting a text cell apart at a known separator character and extracting the piece(s) we need.
+
+The fixing process is two steps per column:
+
+.str.split(separator, expand=True) — splits the string and expands the result into separate columns (indexed 0, 1, 2, ...).
+[index] — selects the specific piece we need, then .astype(float) if the result should be a number.
+The code cells below demonstrate each split individually before we assemble the full chain. We call this the "build up slowly" approach: verify each step works before combining.
+
+Code 1.1.5.2 — Inspect the raw lat-lon column:
+
+(
+    pd.read_csv(path_3)
+    ["lat-lon"]
+    .head()
+)
+📊 You should see values like "19.4326,-99.1332" — latitude and longitude stuck together with a comma in between, stored as a single text string.
+
+Why this breaks tidy data: the column name is lat-lon, suggesting it holds two variables. Latitude (lat) and longitude (lon) are distinct variables — one measures north-south position, the other east-west. They must each have their own column before we can use them as numbers in computations.
+
+The fix: .str.split(",", expand=True) splits each string at the comma and creates a new DataFrame where column 0 is the part before the comma (latitude) and column 1 is the part after the comma (longitude).
+
+Code 1.1.5.3 — Split on the comma separator:
+
+(
+    pd.read_csv(path_3)
+    ["lat-lon"]
+    .str.split(",", expand=True)
+    .head()
+)
+📊 You should now see two columns — 0 and 1.
+
+Column 0 contains the latitude string (e.g., "19.4326").
+Column 1 contains the longitude string (e.g., "-99.1332").
+Important: the values are still text strings — they look like numbers but are wrapped in quotes by Python. The dtype of both columns is object, not float64. We must convert them with .astype(float) before any arithmetic is possible.
+
+Why we use [0] and [1] to select pieces: expand=True returns a DataFrame (not a Series). In this DataFrame, columns are named 0, 1, 2, etc. — integer indices. We access column 0 with [0]. This is the same as df[0] on a DataFrame — positional integer column access.
+
+Code 1.1.5.4 — Convert the latitude piece to float:
+
+(
+    pd.read_csv(path_3)
+    ["lat-lon"]
+    .str.split(",", expand=True)[0]
+    .astype(float)
+    .head()
+)
+📊 The values look the same but are now proper decimal numbers.
+
+Python no longer displays quote marks around them — that is the visual cue that the dtype changed from object to float64. You can now:
+
+Compute mean(), std(), min(), max() — all arithmetic works.
+Plot them on a map — geographic libraries expect float coordinates.
+Compare them with >, <, == — boolean comparisons work correctly.
+We apply the exact same .str.split(...)[1].astype(float) pattern to longitude, which lives at index [1].
+
+Code 1.1.5.5 — Inspect the place_with_parent_names column:
+
+(
+    pd.read_csv(path_3)
+    ["place_with_parent_names"]
+    .head()
+)
+📊 You'll see long strings like "|Mexico|Jalisco|Guadalajara|" — the state name is the third element in a path-like structure where each level is separated by a pipe character |.
+
+Anatomy of the path string:
+
+Index 0: empty string (before the first |)
+Index 1: "Mexico" (country)
+Index 2: "Jalisco" (state) ← this is what we need
+Index 3: "Guadalajara" (city — varies by listing)
+Index 4: empty string or sub-city name
+We split on | and select index [2] to extract the state.
+
+Code 1.1.5.6 — Split on the pipe separator |:
+
+(
+    pd.read_csv(path_3)
+    ["place_with_parent_names"]
+    .str.split("|", expand=True)
+    .head()
+)
+📊 You'll see the string split into several columns (0, 1, 2, 3, ...).
+
+Column 2 contains the state name. Selecting it with [2] gives you a clean state-name Series — no pipe characters, no country name, no city name. The dtype is already object (text), which is correct for a state name — no type conversion is needed.
+
+Why not use a different index? Index [1] is always "Mexico" — useless because it is the same for all rows. Index [3] is the city — more granular than we need (and inconsistently populated across listings). Index [2] is the state — the correct granularity for our location analysis.
+
+Code 1.1.5.7 — The complete df3 cleaning pipeline:
+
+# cleaning process using method chaining
+df3 = (
+    pd.read_csv(path_3)
+    # Drop null values from df3
+    .dropna()
+    # Create "lat" and "lon" columns for df3
+    .assign(lat=lambda x: x["lat-lon"]
+                .str.split(",", expand=True)[0]           
+                .astype(float),
+            lon=lambda x: x["lat-lon"]
+                .str.split(",", expand=True)[1]           
+                .astype(float),
+            # Create "state" column for df3
+            state=lambda x: x["place_with_parent_names"]
+            .str.split("|", expand=True)[2]
+           )
+    
+    # Drop "place_with_parent_names" and "lat-lon" from df3
+    .drop(columns=["place_with_parent_names", "lat-lon"])
+            
+    
+)
+
+# Print object type, shape, and head
+print("df3 type:", type(df3))
+print("df3 shape:", df3.shape)
+df3.head()
+💡 Two structural features of the df3 pipeline worth noting:
+
+1. One .assign() call creates three columns simultaneously. Instead of three separate .assign() calls (which would work but be verbose), we define lat, lon, and state in a single .assign() with three keyword arguments. pandas evaluates all of them and returns one new DataFrame.
+
+2. The lambda x: placeholder appears three times — and each time, x refers to the same intermediate state. At the point where .assign() executes (right after .dropna()), x is the DataFrame with missing rows already removed. All three lambdas receive the same x. This is critical: the lat-lon column exists in x (before we drop it with .drop()), so all three extractions can reference it.
+
+The lambda x: Pattern — Complete Formal Recap
+Every time you write .assign(column_name = lambda x: ...), remember:
+
+x = the DataFrame as it exists at *this exact step* in the chain
+Specifically for the df3 chain:
+
+Step in chain	What x is when .assign() runs
+After pd.read_csv(path_3)	Raw DataFrame, 8+ columns, mixed types
+After .dropna()	Same columns, rows with NaN removed
+.assign(lat=..., lon=..., state=...)	x = post-dropna DataFrame — has lat-lon and place_with_parent_names columns to reference
+After .drop(columns=[...])	New DataFrame with cleaned columns, old columns removed
+⚠️ Why x matters — a common mistake: If you try to write lambda x: x["lat"].str.split(...) inside .assign(), you will get a KeyError — the column "lat" does not yet exist at that point in the chain. The lambdas for lat, lon, and state must reference the original composite columns ("lat-lon" and "place_with_parent_names"), not the new ones they are creating.
+
+Code Task 1.1.5.4: Check that all three DataFrames have the same column set.
+
+# Check if all column sets are identical
+columns_match = set(...) == set(...) == set(...)
+
+if columns_match:
+    print("✅ All DataFrames have the same columns.")
+else:
+    print("❌ Column mismatch detected!")
+    # Optional: See the difference
+    print("df1 vs df2 diff:", set(df1.columns) ^ set(df2.columns))
+    print("df2 vs df3 diff:", set(df2.columns) ^ set(df3.columns))
+📊 You should see ✅ All DataFrames have the same columns.
+
+This check confirms that df1.columns, df2.columns, and df3.columns contain the same names in the same order — a prerequisite for stacking with pd.concat().
+
+If you see a mismatch instead:
+
+print(df1.columns.tolist()), print(df2.columns.tolist()), print(df3.columns.tolist()) — identify which DataFrame has the extra or missing column.
+Common cause: the .drop() step in df2's chain still has ... as a placeholder, so price_mxn was not dropped.
+➡️ All three DataFrames are now clean, typed, and schema-matched. Time to stack them into one master dataset.
+
+✅ You can take Multiple Choice Question 1.1.5.1
+
+Code Task 1.1.5.5: Concatenate the three DataFrames into one.
+
+pd.concat() — Stacking Same-Schema DataFrames
+💡 When to use pd.concat() vs alternatives
+
+pd.concat() is the right tool when you want to stack multiple DataFrames that share the same column schema — adding more rows of the same kind of data. Compare it to alternatives:
+
+Tool	Use case
+pd.concat([df1, df2])	Stack rows — same columns, more observations
+pd.merge(df1, df2, on="id")	Join columns — same rows, more variables
+pd.concat([df1, df2], axis=1)	Stack columns side by side — same rows, different variables
+For combining three CSV files of the same type of data, pd.concat() with the default axis=0 (rows) is exactly right.
+
+Syntax:
+
+df = pd.concat([df1, df2, df3], ignore_index=True)
+Pass a list of DataFrames — order matters (determines the order of rows in the result).
+ignore_index=True — explained below — is almost always what you want.
+# Stack df1, df2, and df3 vertically
+df = pd.concat(..., ignore_index=True)
+
+# Verify the result
+print(f"Combined Shape: {df.shape}")
+df.head()
+📊 After pd.concat() — what to verify
+
+1 — Row count: df.shape[0] should equal df1.shape[0] + df2.shape[0] + df3.shape[0]. This is the most direct sanity check: if any rows were lost or duplicated, the sum will not match.
+
+2 — Column count: df.shape[1] should still be 6. If pd.concat() found any column mismatch, it would have added NaN-filled columns — check df.isnull().sum() to confirm no new missing values appeared.
+
+3 — Index: Run df.index — with ignore_index=True, you should see RangeIndex(start=0, stop=N, step=1) — a clean sequential index from 0 to N-1.
+
+💡 Why ignore_index=True matters — and what happens without it
+
+By default, pd.concat() preserves each DataFrame's original index. Since all three files start their index at 0, the combined DataFrame will have triplicate index values — three rows with index 0, three with index 1, etc.
+
+Problems caused by duplicate index values:
+
+df.loc[0] returns three rows instead of one — unexpected behavior.
+.join() and .merge() operations use the index to align data and will produce cross-products of the duplicated rows — almost certainly wrong.
+Some iteration patterns assume unique index values and silently compute wrong results.
+ignore_index=True discards all three original indices and assigns a fresh continuous index (0, 1, 2, ..., N-1) to the combined DataFrame. This is almost always what you want after a vertical stack.
+
+⚠️ One caveat: pd.concat() does not check for schema mismatches — it silently fills mismatched columns with NaN. If one DataFrame has an extra column, the combined DataFrame will have it too, with NaN in the rows from the other DataFrames. The column-equality check we ran above prevents this.
+
+Code 1.1.5.7 — Save the combined dataset to disk:
+
+# Save your cleaned combined dataset
+df.to_csv("./data/mexico-real-estate-combined-clean.csv", index=False)
+🧠 The Read → Clean → Save pipeline — a foundational pattern
+
+What we just built across §3–§5 is the canonical data wrangling workflow that appears in virtually every data science project, regardless of domain:
+
+Stage	Operation	Purpose
+Read	pd.read_csv(path)	Load raw data from its source format into memory
+Clean	.dropna(), .assign(), .drop(), .str.replace()	Fix types, remove bad rows, resolve schema mismatches
+Save	df.to_csv(path, index=False)	Persist the clean version so subsequent notebooks load it directly
+Why saving to a clean CSV is the right checkpoint format:
+
+Human-readable — you can open the file in a spreadsheet program to inspect it manually.
+Language-agnostic — R, Excel, SQL, or any other tool can read the same clean file.
+Reproducible — future notebooks always load the same data, regardless of whether this notebook has been re-run recently.
+Separation of concerns — cleaning logic lives here, in L1, exactly once. Every subsequent lesson imports the clean version and focuses on analysis.
+The index=False argument: without it, df.to_csv() writes the DataFrame's integer index as an extra column named Unnamed: 0. Every time you reload that file and save it again without index=False, another Unnamed: 0 column accumulates. Always use index=False when saving a cleaned dataset.
+
+➡️ This saved file is what Lessons 2, 3, and 4 will load. The entire cleaning logic lives here, in L1. That is reproducibility in practice.
+
+6. Descriptive Statistics
+🎯 .describe() — your first statistical snapshot of the combined dataset
+
+With the three files merged and saved, we can now ask: what does the overall distribution of prices and areas look like? .describe() answers this question with eight summary statistics per numeric column, computed on the combined 1,700+ row dataset.
+
+📌 The eight outputs explained
+
+Row	Statistic	Formula / Definition	How to interpret it
+count	Non-missing values	Count of non-NaN rows	Should match your total row count after cleaning
+mean	Arithmetic average	
+ 
+The "center" — but pulled by outliers
+std	Standard deviation	
+ 
+Average spread around the mean
+min	Minimum	Smallest observed value	Useful for spotting impossible values
+25%	First quartile (Q1)	Value below which 25% of observations fall	Lower bound of the "middle 50%"
+50%	Median (Q2)	Middle value when sorted	More robust than mean in skewed data
+75%	Third quartile (Q3)	Value below which 75% of observations fall	Upper bound of the "middle 50%"
+max	Maximum	Largest observed value	Useful for spotting extreme outliers
+Standard deviation — the most important row after mean:
+
+Standard deviation measures the average distance of each observation from the mean. A low standard deviation means most values cluster tightly around the mean. A high standard deviation means values are spread widely.
+
+For housing prices, a standard deviation of 
+65,000 in either direction — a very spread-out market. Compare this to area_m2: its standard deviation is much smaller relative to its mean, indicating more consistent property sizes.
+
+Mean vs median — the skewness signal:
+
+When mean ≠ median, the distribution is not symmetric. The direction of the gap tells you which way the tail pulls:
+
+Condition	What it means	What causes it
+mean > median	Right skew (positive skew) — long tail on the right	A few very large values pull the mean up
+mean < median	Left skew (negative skew) — long tail on the left	A few very small values pull the mean down
+mean ≈ median	Approximately symmetric	Values distributed evenly around the center
+For housing prices, we almost always see right skew: most properties are modestly priced, but a small number of luxury properties are extremely expensive. These outliers pull the mean well above what a "typical" buyer would pay. The median — which is literally the middle value — is unaffected by those extremes and is the more honest "typical price" figure.
+
+Code 1.1.6.1
+
+# Summarize the numeric columns
+summary = df[["price_usd", "area_m2"]].describe()
+
+# # Format for readability
+pd.options.display.float_format = '{:,.2f}'.format
+
+summary
+📊 Reading the .describe() output — price and area across all three files
+
+price_usd — what to expect:
+
+count should be the combined row count across all three cleaned files (roughly 1,700+ listings). If count is less, some price_usd values are still NaN — which means the cleaning chain has a gap.
+mean vs 50% (median): Expect to see mean noticeably larger than median — a classic right-skew signature. For Mexico City housing data, the mean might be around 115,000–120,000 while the median sits around 95,000–100,000. The 15,000–25,000 gap tells you that luxury properties are pulling the average up.
+std: Expect roughly 60,000–70,000 — meaning a typical property is about $65,000 away from the mean price. This enormous variability (more than half the median price) tells you that price depends strongly on other factors — location, size, property type. A single number like the mean cannot adequately describe this market.
+min and max: Watch for suspicious extremes. A minimum price of 1,000 or a maximum of 10,000,000 would suggest data quality issues — either leftover bad rows or genuine luxury outliers.
+area_m2 — what to expect:
+
+Expect right skew here too: most properties are in the 50–200 m² range, but a few large houses have areas over 500 m², pulling the mean above the median.
+The interquartile range (Q3 minus Q1) tells you the range of the "typical 50%" of properties.
+🧠 Why mean vs median matters for this project's research question
+
+Our research question — are prices more influenced by size or location? — will require us to compare prices across states. When comparing groups, which central tendency measure do we use?
+
+Mean: fast to compute, familiar — but in a right-skewed distribution, a single luxury property in a state can inflate the mean for the entire state.
+Median: the middle value, unaffected by extremes — better represents what a "typical buyer" in that state would pay.
+We will use median as our primary comparison metric in Lesson 4 when we build the grouped analysis by state.
+
+⚠️ Limitation of .describe() — the five things it cannot tell you
+
+Summary statistics collapse the entire distribution into eight numbers. They cannot reveal:
+
+Whether the distribution is unimodal (one peak) or bimodal (two peaks — e.g., two distinct price tiers).
+Where the outliers are (only that they exist, from max).
+The relationship between price and area — are they correlated?
+The shape of the distribution — is the tail long or short?
+Geographic patterns — which states are expensive?
+That is precisely why we need Lesson 2: visualization reveals what statistics can only hint at.
+
+✅ You can take Multiple Choice Question 1.1.6.1
+
+Wrap-up
+You have built the foundation for all four P1 lessons. Here is what you established:
+
+Tidy data is the structural contract that makes pandas powerful. The three rules — one variable per column, one observation per row, one value per cell — determine whether a dataset is immediately usable or requires reshaping. The third CSV file in our dataset violated rules 1 and 3 simultaneously; recognizing and fixing violations is now part of your standard workflow.
+
+The five-method inspection ritual (.head(), .shape, .info(), .dtypes, .isnull().sum()) gives you a complete picture of any new dataset in about ten seconds. Running it before touching the data prevents the majority of type-mismatch and missing-value bugs. Make it a habit.
+
+Method chaining is the pandas idiom for readable, debuggable pipelines: each method returns a new DataFrame, and wrapping the chain in () tells Python to treat multiple lines as one expression. The lambda x: pattern inside .assign() refers to the DataFrame as it exists at that step — not the original or the final.
+
+pd.concat() stacks same-schema DataFrames vertically. ignore_index=True replaces the original index values with a fresh 0-to-N-1 sequence, preventing the duplicate-index bugs that would otherwise silently corrupt later operations.
+
+.describe() provides the first numerical overview of the combined dataset. When mean > median (right skew), the median is the more honest "typical" value — a pattern we will exploit heavily in the grouped analysis of Lesson 4.
+
+⚠️ What .describe() cannot show: distribution shape, outlier location, inter-variable relationships, and geographic patterns. These require visualization.
+
+➡️ In Lesson 2 (Visualizing Housing Data), you will build histograms, boxplots, and scatterplots to see the distributions and relationships that the summary statistics above only hint at. You will also learn how to remove outliers quantitatively — a necessary step before any correlation analysis.
